@@ -47,7 +47,13 @@ property to true in Firefox.
   function getUserMediaOkCallback(localStream) {
     gFirstConnection = new RTCPeerConnection(null);
     gFirstConnection.onicecandidate = onIceCandidateToFirst;
-    gFirstConnection.addStream(localStream);
+    if (RTCPeerConnection.prototype.addTrack) { 
+      localStream.getTracks().forEach(function(track) {
+        gFirstConnection.addTrack(track, localStream);
+      });
+    } else {
+      gFirstConnection.addStream(localStream);
+    }
     gFirstConnection.createOffer(onOfferCreated, failed('createOffer'));
 
     var videoTag = document.getElementById('local-view');
@@ -65,6 +71,7 @@ property to true in Firefox.
   function receiveCall(offerSdp) {
     gSecondConnection = new RTCPeerConnection(null);
     gSecondConnection.onicecandidate = onIceCandidateToSecond;
+    gSecondConnection.ontrack = onRemoteTrack;
     gSecondConnection.onaddstream = onRemoteStream;
 
     var parsedOffer = new RTCSessionDescription({ type: 'offer',
@@ -97,6 +104,12 @@ property to true in Firefox.
     gFirstConnection.addIceCandidate(event.candidate);
   });
 
+  var onRemoteTrack = test.step_func(function(event) {
+    var videoTag = document.getElementById('remote-view');
+    if (!videoTag.srcObject) {
+      videoTag.srcObject = event.streams[0];
+    }
+  });
   var onRemoteStream = test.step_func(function(event) {
     var videoTag = document.getElementById('remote-view');
     videoTag.srcObject = event.stream;
