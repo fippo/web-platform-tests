@@ -8,6 +8,26 @@
 <script>
   'use strict';
 
+  /* helper function to create and clean-up a peerconnection inside a
+   * test context.
+   */
+  function createPeerConnectionWithCleanup(t) {
+    const pc = new RTCPeerConnection();
+    t.add_cleanup(() => pc.close());
+    return pc;
+  }
+
+  /* helper function to create and clean-up a MediaStreamTrack inside a
+   * test context.
+   */
+  function getTrackWithCleanup(kind, t) {
+    return getTrackFromUserMedia(kind)
+    .then([track, stream] => {
+      t.add_cleanup(() => track.stop());
+      return [track, stream];
+    });
+  }
+
   // Run some tests for both audio and video kinds
   ['audio', 'video'].forEach((kind) => {
     const capsKind = kind[0].toUpperCase() + kind.slice(1);
@@ -20,13 +40,23 @@
 
     // Start testing
     promise_test(t => {
-      const pc = new RTCPeerConnection();
-      const dummy = pc.createDataChannel('foo'); // Just to have something to offer
+      const pc = createPeerConnection(t);
 
-      return pc.createOffer(offerToReceiveFalse)
+      const otherKind = {audio: 'video', video: 'audio'}[kind];
+      /* add a track of the other kind to avoid empty offer.
+       * Workaround for Firefox behaviour, see
+       * https://github.com/w3c/webrtc-pc/issues/1745
+       */
+      return getTrackWithCleanup(kind, t)
+      .then(([track, stream]) => {
+        pc.addTrack(track, stream);
+        return pc.createOffer(offerToReceiveFalse)
+      })
       .then(() => {
-        assert_equals(pc.getTransceivers().length, 0,
-          'Expect pc to have no transceivers');
+        const transceivers = pc.getTransceivers();
+        const transceiversWithKind = transceivers.filter(t => t.receiver.track.kind === kind);
+        assert_equals(transceiversWithKind).length, 0,
+          `Expect pc to have no ${kind} transceivers`);
       });
     }, `createOffer() with offerToReceive${capsKind} set to false should not create a transceiver`);
 
@@ -67,7 +97,7 @@
     promise_test(t => {
       const pc = new RTCPeerConnection();
 
-      return getTrackFromUserMedia(kind)
+      return getTrackWithCleanup(kind, t)
       .then(([track, stream]) => {
         pc.addTrack(track, stream);
         return pc.createOffer();
@@ -91,7 +121,7 @@
     promise_test(t => {
       const pc = new RTCPeerConnection();
 
-      return getTrackFromUserMedia(kind)
+      return getTrackWithCleanup(kind, t)
       .then(([track, stream]) => {
         pc.addTrack(track, stream);
         return pc.createOffer(offerToReceiveFalse);
@@ -128,7 +158,7 @@
       const pc = new RTCPeerConnection();
       const pc2 = new RTCPeerConnection();
 
-      return getTrackFromUserMedia(kind)
+      return getTrackWithCleanup(kind, t)
       .then(([track, stream]) => {
         pc.addTrack(track, stream);
         return pc.createOffer();
