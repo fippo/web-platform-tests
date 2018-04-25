@@ -72,8 +72,8 @@ function webrtc_test(testFunc, name) {
       peerconnections = [];
       window.RTCPeerConnection = origRTCPeerConnection;
     });
-    return testFunc(t, name);
-  });
+    return testFunc(t);
+  }, name);
 }
 </script>
 <script>
@@ -89,9 +89,28 @@ function webrtc_test(testFunc, name) {
     console.log('three');
     const pc = new RTCPeerConnection();
     pc.close();
-  }, 'it does not close closed peerconnections');
-  test(t => {
-    console.log('sync test');
+  }, 'it works even if you closed all peerconnections');
+  webrtc_test(async t => {
     const pc = new RTCPeerConnection();
-  }, 'sync test?');
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const sender = pc.addTrack(stream.getTracks()[0]);
+    assert_true(sender instanceof RTCRtpSender,
+      'Expect sender to be instance of RTCRtpSender');
+  }, 'addTrack with no stream');
+
+  webrtc_test(async t => {
+    const pc = new RTCPeerConnection();
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const sender = pc.addTrack(stream.getTracks()[0], stream);
+    assert_true(sender instanceof RTCRtpSender,
+      'Expect sender to be instance of RTCRtpSender');
+  }, 'addTrack with stream');
+
+  webrtc_test(async t => {
+    const pc = new RTCPeerConnection();
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const sender = pc.addTrack(stream.getTracks()[0], stream, stream.clone());
+    assert_true(sender instanceof RTCRtpSender,
+      'Expect sender to be instance of RTCRtpSender');
+  }, 'addTrack with two streams');
 </script>
